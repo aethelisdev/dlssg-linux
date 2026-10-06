@@ -118,5 +118,8 @@ WINEDLLOVERRIDES="version,dinput8=n,b" %command%
 
 -------------------------------------------------------------
 
-Credits: sdii1995 for dlssg.
+## Credits & Acknowledgements
 
+- **sdii1995**: Original DLSS-G implementation
+- **pipotoufikxyz-lgtm**: SM86 MFG modifications & Vulkan export surface
+- **aethelisdev**: Linux Native (`.so`) & Proton/Wine (`.dll`) port, MinGW toolchain, and integration test suite
