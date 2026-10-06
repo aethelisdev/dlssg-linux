@@ -5,6 +5,7 @@ build-*/
 release/
 *.o
 *.a
+!cmake/*.a
 *.so
 *.dll
 

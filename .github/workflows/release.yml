@@ -32,9 +32,13 @@ jobs:
           if [ -d /usr/include/vk_video ]; then
             cp -r /usr/include/vk_video .deps/include/
           fi
+          if [ ! -f "cmake/libvulkan-1.a" ]; then
+            x86_64-w64-mingw32-dlltool -d cmake/vulkan-1.def -l cmake/libvulkan-1.a -k
+          fi
           cmake -B build-proton \
             -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw64.cmake \
             -DVulkan_INCLUDE_DIR="$(pwd)/.deps/include" \
+            -DVulkan_LIBRARY="$(pwd)/cmake/libvulkan-1.a" \
             -DCMAKE_BUILD_TYPE=Release \
             -DDLSSG_BUILD_TESTS=OFF
           cmake --build build-proton -j$(nproc)

@@ -11,3 +11,8 @@ set(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+# Provide bundled MinGW Vulkan import library if not explicitly specified
+if(NOT DEFINED Vulkan_LIBRARY AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/libvulkan-1.a")
+    set(Vulkan_LIBRARY "${CMAKE_CURRENT_LIST_DIR}/libvulkan-1.a" CACHE FILEPATH "Vulkan import library")
+endif()
