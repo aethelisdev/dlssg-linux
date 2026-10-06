@@ -68,7 +68,55 @@ To Activate it: activate it through Nvidia Profile Inspector
 
   Same Steps As 3000s series's install
 
-  -------------------------------------------------------------
+-------------------------------------------------------------
 
+## Linux & Proton Build Support
+
+This repository supports building both Linux native shared libraries (`.so`) and Windows PE binaries (`.dll`) for Proton/Wine directly on Linux.
+
+### Requirements
+
+- CMake 3.20+
+- Vulkan SDK / Vulkan headers (`vulkan-headers`)
+- C++17 compatible compiler (GCC or Clang)
+- *(Optional for Proton)*: MinGW-w64 cross compiler (`mingw-w64-gcc`)
+
+### Building
+
+You can use the helper script `./build.sh` or standard CMake:
+
+#### 1. Native Linux (`.so`)
+```bash
+./build.sh native
+# Or via CMake directly:
+cmake -B build-native -DCMAKE_BUILD_TYPE=Release
+cmake --build build-native
+```
+Outputs generated in `build-native/src/`:
+- `libdlssg_vulkan_route.so`
+- `libdlssg_vulkan_proxy.so`
+- `libdlssg_vulkan_ngx.so`
+
+#### 2. Proton / Wine (`.dll` via MinGW cross-compilation)
+```bash
+./build.sh proton
+# Or via CMake directly:
+cmake -B build-proton -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw64.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build-proton
+```
+Outputs generated in `build-proton/src/`:
+- `dlssg_vulkan_route.dll`
+- `dlssg_vulkan_proxy.dll`
+- `dlssg_vulkan_ngx.dll`
+
+### Proton / Steam Launch Options
+
+When running games under Proton on Linux with these mods, place the DLLs next to the game executable and add:
+```bash
+WINEDLLOVERRIDES="version,dinput8=n,b" %command%
+```
+
+-------------------------------------------------------------
 
 Credits: sdii1995 for dlssg.
+

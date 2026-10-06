@@ -8,7 +8,7 @@
 #define DLSSG_NGX_API __declspec(dllexport)
 #define DLSSG_NGX_CALL __cdecl
 #else
-#define DLSSG_NGX_API
+#define DLSSG_NGX_API __attribute__((visibility("default")))
 #define DLSSG_NGX_CALL
 #endif
 

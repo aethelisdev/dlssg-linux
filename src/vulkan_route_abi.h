@@ -8,7 +8,7 @@
 #define DLSSG_VULKAN_API __declspec(dllexport)
 #define DLSSG_VULKAN_CALL __cdecl
 #else
-#define DLSSG_VULKAN_API
+#define DLSSG_VULKAN_API __attribute__((visibility("default")))
 #define DLSSG_VULKAN_CALL
 #endif
 

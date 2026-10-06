@@ -1,12 +1,20 @@
 #include "vulkan_ngx_loader.h"
 
+#if defined(_WIN32)
 #include <windows.h>
+using ModuleHandle = HMODULE;
+#else
+#include <dlfcn.h>
+#include <cwchar>
+#include <vector>
+using ModuleHandle = void*;
+#endif
 
 #include <new>
 #include <string>
 
 struct DlssgVulkanNgx {
-    HMODULE module = nullptr;
+    ModuleHandle module = nullptr;
     uint32_t resolved = 0;
     DlssgVulkanDevice device{};
     DlssgVulkanLifecycle lifecycle{};
@@ -38,6 +46,56 @@ void Error(DlssgVulkanNgx* loader, const char* message) {
     loader->error = message;
 }
 
+static ModuleHandle OpenNgxLibrary(const wchar_t* path) {
+#if defined(_WIN32)
+    return LoadLibraryW(path != nullptr ? path : L"nvngx_dlssg.dll");
+#else
+    std::string path_str;
+    if (path != nullptr) {
+        size_t len = wcslen(path);
+        std::vector<char> buf(len * 4 + 1);
+        size_t converted = wcstombs(buf.data(), path, buf.size());
+        if (converted != static_cast<size_t>(-1)) {
+            path_str = buf.data();
+        } else {
+            for (size_t i = 0; i < len; ++i) {
+                path_str.push_back(static_cast<char>(path[i]));
+            }
+        }
+    } else {
+        path_str = "libnvngx_dlssg.so";
+    }
+
+    void* handle = dlopen(path_str.c_str(), RTLD_NOW | RTLD_LOCAL);
+    if (!handle && path == nullptr) {
+        handle = dlopen("./libnvngx_dlssg.so", RTLD_NOW | RTLD_LOCAL);
+        if (!handle) {
+            handle = dlopen("nvngx_dlssg.so", RTLD_NOW | RTLD_LOCAL);
+        }
+        if (!handle) {
+            handle = dlopen("nvngx_dlssg.dll", RTLD_NOW | RTLD_LOCAL);
+        }
+    }
+    return handle;
+#endif
+}
+
+static void* GetFunctionSymbol(ModuleHandle mod, const char* name) {
+#if defined(_WIN32)
+    return reinterpret_cast<void*>(GetProcAddress(mod, name));
+#else
+    return dlsym(mod, name);
+#endif
+}
+
+static void CloseNgxLibrary(ModuleHandle mod) {
+#if defined(_WIN32)
+    FreeLibrary(mod);
+#else
+    dlclose(mod);
+#endif
+}
+
 }  // namespace
 
 extern "C" DLSSG_NGX_API VkResult DLSSG_NGX_CALL
@@ -50,20 +108,20 @@ DlssgVulkanNgx_Load(const wchar_t* path, DlssgVulkanNgx** output) {
     if (loader == nullptr) {
         return VK_ERROR_OUT_OF_HOST_MEMORY;
     }
-    loader->module = LoadLibraryW(path != nullptr ? path : L"nvngx_dlssg.dll");
+    loader->module = OpenNgxLibrary(path);
     if (loader->module == nullptr) {
         Error(loader, "Could not load the NGX Vulkan runtime");
         delete loader;
         return VK_ERROR_INITIALIZATION_FAILED;
     }
     for (const char* name : kExports) {
-        if (GetProcAddress(loader->module, name) != nullptr) {
+        if (GetFunctionSymbol(loader->module, name) != nullptr) {
             ++loader->resolved;
         }
     }
     if (loader->resolved != kRequiredExports) {
         Error(loader, "NGX runtime is missing required Vulkan exports");
-        FreeLibrary(loader->module);
+        CloseNgxLibrary(loader->module);
         delete loader;
         return VK_ERROR_INCOMPATIBLE_DRIVER;
     }
@@ -77,7 +135,7 @@ DlssgVulkanNgx_Unload(DlssgVulkanNgx* loader) {
         return;
     }
     if (loader->module != nullptr) {
-        FreeLibrary(loader->module);
+        CloseNgxLibrary(loader->module);
     }
     delete loader;
 }

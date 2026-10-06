@@ -1,12 +1,20 @@
 #include "vulkan_proxy.h"
 
+#if defined(_WIN32)
 #include <windows.h>
+using ModuleHandle = HMODULE;
+#else
+#include <dlfcn.h>
+#include <cwchar>
+#include <vector>
+using ModuleHandle = void*;
+#endif
 
 #include <new>
 #include <string>
 
 struct DlssgVulkanProxy {
-    HMODULE route_module = nullptr;
+    ModuleHandle route_module = nullptr;
     DlssgVulkanRouteApi route_api{};
     DlssgVulkanRoute* route = nullptr;
     std::string error;
@@ -21,18 +29,64 @@ void SetError(DlssgVulkanProxy* proxy, const char* message) {
     proxy->error = message;
 }
 
+static ModuleHandle OpenRouteLibrary(const wchar_t* path) {
+#if defined(_WIN32)
+    return LoadLibraryW(path != nullptr ? path : L"dlssg_vulkan_route.dll");
+#else
+    std::string path_str;
+    if (path != nullptr) {
+        size_t len = wcslen(path);
+        std::vector<char> buf(len * 4 + 1);
+        size_t converted = wcstombs(buf.data(), path, buf.size());
+        if (converted != static_cast<size_t>(-1)) {
+            path_str = buf.data();
+        } else {
+            for (size_t i = 0; i < len; ++i) {
+                path_str.push_back(static_cast<char>(path[i]));
+            }
+        }
+    } else {
+        path_str = "libdlssg_vulkan_route.so";
+    }
+
+    void* handle = dlopen(path_str.c_str(), RTLD_NOW | RTLD_LOCAL);
+    if (!handle && path == nullptr) {
+        handle = dlopen("./libdlssg_vulkan_route.so", RTLD_NOW | RTLD_LOCAL);
+        if (!handle) {
+            handle = dlopen("dlssg_vulkan_route.so", RTLD_NOW | RTLD_LOCAL);
+        }
+    }
+    return handle;
+#endif
+}
+
+static void* GetFunctionSymbol(ModuleHandle mod, const char* name) {
+#if defined(_WIN32)
+    return reinterpret_cast<void*>(GetProcAddress(mod, name));
+#else
+    return dlsym(mod, name);
+#endif
+}
+
+static void CloseRouteLibrary(ModuleHandle mod) {
+#if defined(_WIN32)
+    FreeLibrary(mod);
+#else
+    dlclose(mod);
+#endif
+}
+
 VkResult LoadRoute(DlssgVulkanProxy* proxy, const wchar_t* path) {
-    proxy->route_module = LoadLibraryW(path != nullptr ? path
-                                                        : L"dlssg_vulkan_route.dll");
+    proxy->route_module = OpenRouteLibrary(path);
     if (proxy->route_module == nullptr) {
-        SetError(proxy, "Could not load dlssg_vulkan_route.dll");
+        SetError(proxy, "Could not load dlssg_vulkan_route library");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
     auto get_api = reinterpret_cast<GetRouteApiFn>(
-        GetProcAddress(proxy->route_module, "DlssgVulkan_GetRouteApi"));
+        GetFunctionSymbol(proxy->route_module, "DlssgVulkan_GetRouteApi"));
     if (get_api == nullptr) {
-        SetError(proxy, "Loaded route DLL has no Vulkan route ABI export");
+        SetError(proxy, "Loaded route library has no Vulkan route ABI export");
         return VK_ERROR_INCOMPATIBLE_DRIVER;
     }
 
@@ -51,7 +105,7 @@ void UnloadRoute(DlssgVulkanProxy* proxy) {
     }
     proxy->route = nullptr;
     if (proxy->route_module != nullptr) {
-        FreeLibrary(proxy->route_module);
+        CloseRouteLibrary(proxy->route_module);
     }
     proxy->route_module = nullptr;
 }

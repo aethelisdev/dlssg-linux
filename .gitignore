@@ -1,0 +1,14 @@
+# Build directories
+build/
+build-*/
+.deps/
+*.o
+*.a
+*.so
+*.dll
+
+# IDE and temp files
+.vscode/
+.idea/
+*.swp
+*~
