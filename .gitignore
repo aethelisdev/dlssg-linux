@@ -2,6 +2,7 @@
 build/
 build-*/
 .deps/
+release/
 *.o
 *.a
 *.so

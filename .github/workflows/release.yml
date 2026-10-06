@@ -1,0 +1,75 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools and MinGW
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libvulkan-dev gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 zip
+
+      - name: Build Native Linux (.so)
+        run: |
+          ./build.sh native
+
+      - name: Build Proton Windows (.dll)
+        run: |
+          mkdir -p .deps/include
+          cp -r /usr/include/vulkan .deps/include/
+          if [ -d /usr/include/vk_video ]; then
+            cp -r /usr/include/vk_video .deps/include/
+          fi
+          cmake -B build-proton \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw64.cmake \
+            -DVulkan_INCLUDE_DIR="$(pwd)/.deps/include" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDLSSG_BUILD_TESTS=OFF
+          cmake --build build-proton -j$(nproc)
+
+      - name: Package Release Assets
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME:-v2.8.5}"
+          mkdir -p dist/dlssg-linux-native dist/dlssg-proton
+
+          # Native package
+          cp build-native/src/*.so dist/dlssg-linux-native/
+          cp README.md LICENSE dist/dlssg-linux-native/
+
+          # Proton package
+          cp build-proton/src/*.dll dist/dlssg-proton/
+          if [ -f "SM75-X5-X6-experimental.zip" ]; then
+            unzip -q SM75-X5-X6-experimental.zip -d tmp_zip
+            cp -r tmp_zip/SM75-X5-X6-experimental/SM75-X6-experimental/* dist/dlssg-proton/ || true
+            rm -rf tmp_zip
+          fi
+          cp README.md LICENSE dist/dlssg-proton/
+
+          cd dist
+          tar -czvf ../dlssg-linux-native-${TAG_NAME}.tar.gz dlssg-linux-native
+          zip -r ../dlssg-proton-${TAG_NAME}.zip dlssg-proton
+          cd ..
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Release ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dlssg-linux-native-*.tar.gz
+            dlssg-proton-*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
